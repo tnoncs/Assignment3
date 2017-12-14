@@ -1,0 +1,467 @@
+---
+title: "Assignment2_Part1_VoiceInSchizophrenia"
+author: "Riccardo Fusaroli"
+date: "July 17, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = '/home/tnoncs/Assignment3')
+```
+
+## Assignment 2 - Part 1 - Assessing voice in schizophrenia
+
+Schizophrenia has been associated with "inappropriate" voice, sometimes monotone, sometimes croaky. A few studies indicate that pitch might be an index of schizophrenia. However, an ongoing meta-analysis of the literature (which you will have a go at in the last assignment) indicates that pitch mean and standard deviation are only weak indicators of Diagnosis. Can we do better with our new fancy complex skills?
+
+The corpus you are asked to analyse is a set of voice recordings from people with schizophrenia (just after first Diagnosis) and 1-1 matched controls (on gender, age, education). Each participant watched 10 videos of triangles moving across the screen and had to describe them (so you have circa 10 recordings per person). I have already extracted the pitch once every 10 milliseconds and you will have to use this data to assess differences in the voice.
+
+N.B. Question to be answered via email to Celine: can you characterize voice in schizophrenia as acoustically different? Report the methods you used to answer this question and the results from the analyses. Add a couple of lines trying to interpret the results (make sense of the difference). E.g. People with schizophrenia tend to have high-pitched voice, and present bigger swings in their prosody than controls. Add a couple of lines describing limitations of the data/analyses if any is relevant.
+
+N.B. There are looots of files to be dealt with. Probably too many for your computer. This is a challenge for you. Some (complementary) possible strategies: You can select a subset of files only (and you have to justify your choice). You can learn how to use the apply() or map() functions. You can coordinate with classmates.
+
+1. In the course of this assignment you have to first select one datafile and figure out how to:
+
+- Extract "standard" descriptors of pitch: Mean, standard deviation, range
+```{r pressure}
+getwd()
+Studyone= read.table("Pitch/Study1D0S101T2_f0.txt", header=T)
+
+demo_data= read.table("DemoData.txt", header=T)
+
+mean=mean(Studyone$f0)
+sd=sd(Studyone$f0)
+range=range(Studyone$f0)
+```
+- Extract less "standard" descriptors of pitch you can think of (e.g. median, iqr, mean absoluted deviation, coefficient of variation)
+
+iqr like sd but doesn't assume the bell form
+mean absolute deviation: the difference of a value from the mean - make it absolute value to remove minuses - get the mean of them
+coef of variation= sd/mean
+```{r pressure}
+median=median(Studyone$f0)
+iqr=IQR(Studyone$f0)
+meanad= mean(abs(Studyone$f0 - mean(Studyone$f0))) # mean absolute deviation
+# coefvar=sd/mean*100
+coefvar=sd(Studyone$f0)/mean(Studyone$f0)*100
+standard_data=cbind(mean, sd, range, median, iqr, meanad, coefvar) 
+```
+
+- Extract "complex" descriptors: recurrence quantification analysis
+
+```{r pressure}
+library(crqa)
+#Finding the optimal parameters: 
+par = list(lgM =  50, steps = seq(1, 6, 1),  radiusspan = 100,  radiussample = 40, normalize = 0,  rescale = 0,  mindiagline = 2,  minvertline = 2,  tw = 0,  whiteline = FALSE,  recpt = FALSE,  fnnpercent = 10,  typeami = "mindip") 
+ans= optimizeParam(Studyone$f0, Studyone$f0, par, min.rec= 3.5, max.rec= 4.5)
+#Choose a common value for delay, emb.dim and radius
+Results=crqa (Studyone$f0, Studyone$f0, delay=ans$delay, embed=ans$emddim, radius=ans$radius, normalize=0,rescale=0,mindiagline = 2,minvertline = 2)
+
+# #Represent the plot: 
+RP=Results$RP 
+RP = matrix(as.numeric(RP), nrow = ncol(RP))  
+cols = c("white","blue4") 
+image(RP, xlab = "", ylab = "", col = cols) 
+
+#Save the information from crqa
+RR= Results$RR
+DET= Results$DET
+maxL=Results$maxL
+L=Results$L
+ENTR=Results$ENTR
+LAM=Results$LAM
+TT=Results$TT
+
+rqa=data.frame(RR, DET, maxL, L, ENTR, LAM, TT)
+
+all_data=merge(standard_data, rqa)
+```
+
+2. Second you will have to turn the code into a function and loop through all the files (or even better use apply/sapply/lapply)
+- Remember to extract the relevant information from the file names (Participant, Diagnosis, Trial, Study)
+```{r pressure}
+
+file_list = list.files(path= "Pitch", full.names=T)
+all_files=lapply(file_list, FUN=read.table, header=TRUE)
+
+names(all_files)= substring(file_list, 7, 50) 
+
+nombres=names(all_files)
+
+#to merge
+demo_data$Diagnosis=plyr::revalue(demo_data$Diagnosis, c("Control"="0", "Schizophrenia"="1"))
+demo_data = plyr::rename(demo_data, c("Subject" = "id"))
+
+#get out all basic stuff from all filenames
+i= 1
+basic_data=data.frame()
+
+for (n in nombres) {
+  Study= substring(nombres[i], 6, 6)
+  Diagnosis= substring(nombres[i], 8, 8)
+  id= substring(nombres[i], 10, 12)
+  ido= unlist(regmatches(nombres[i], regexec("D(.+)T", nombres[i]))) 
+  id_diff= ido[2]
+  tr= unlist(regmatches(nombres[i], regexec("T(.+)_", nombres[i])))
+  trial= tr[2]
+  basic= cbind(Study, id, id_diff, trial, Diagnosis)
+  basic_data=rbind(basic_data, basic) # save it, or it will replace the previous one 
+  i=i+1
+}
+
+rm(basic, n, Study, Diagnosis, trial, id, i, tr)
+
+basic_and_demo=merge(basic_data, demo_data)
+
+```
+
+#Code to deal with all the files at once
+
+The goal is to have a file that contains basic- standard- rqa- and demodata, for all the voice files.
+1. function to get basic data # from filenames. don't change the name of the folder they're in.
+2. function to get standard data # basic calculations - mean, sd, etc...
+3. function to have rqa data # ?
+4. create list with all filenames
+5. loop through the functions using the list
+6. merge the result with demo data
+
+
+```{r pressure}
+
+#A function to get the info from the name of the files
+
+get_name= function(f_name) {
+  nombres= substring(f_name, 7, 50) #get rid of Pitch\
+  
+  Study= substring(nombres, 6, 6) # get the number after Study
+  Diagnosis= substring(nombres, 8, 8) #get the number after D
+  id= substring(nombres, 10, 12) #get the number after S #ids are the same for two person - wrong
+  ido= unlist(regmatches(nombres, regexec("D(.+)T", nombres))) #create extra ids that has the Diagnosis too
+  id_diff= ido[2] # "0S101" - the difference between the same ids is the Diagnosis, here number before S
+  tr= unlist(regmatches(nombres, regexec("T(.+)_", nombres))) #extracts everything between T and _
+  trial= tr[2] #get the number after T (using this method because there's trial 10 also)
+  
+  basic= data.frame(Study, id, id_diff, trial, Diagnosis) #save them to a dataframe
+  return(basic)
+}
+
+```
+
+```{r pressure}
+
+#A function to get the standard data
+
+get_standard= function(f_name) {
+  nombres=read.table(f_name, header=T) 
+  nev= nombres$f0                                       
+  mean=mean(nev)
+  sd=sd(nev)
+  minimum= min(nev)
+  maximum=max(nev)
+  range= maximum - minimum
+  median=median(nev)
+  iqr=IQR(nev)
+  meanad= mean(abs(nev - mean(nev)))
+  coefvar=sd(nev)/mean(nev)*100
+  standard=data.frame(mean, sd, minimum, maximum, range, median, iqr, meanad,coefvar) 
+  return(standard)
+}
+
+```
+
+```{r pressure}
+# get the rqa data
+library(crqa)
+
+get_rqa= function(f_name) {
+  nombres=read.table(f_name, header=T)
+  
+  par = list(lgM =  50, steps = seq(1, 6, 1),  radiusspan = 100, radiussample = 40, normalize = 0,  rescale = 0,  mindiagline = 2,  minvertline = 2,  tw = 0, whiteline = FALSE,  recpt = FALSE, fnnpercent = 10,  typeami = "mindip") 
+  
+  ans= optimizeParam(nombres$f0, nombres$f0, par, min.rec= 3.5, max.rec= 4.5)
+  
+  Results=crqa (nombres$f0, nombres$f0, delay=ans$delay, embed=ans$emddim, radius=ans$radius,
+                normalize=0,rescale=0,mindiagline = 2,minvertline = 2)
+  RR= Results$RR
+  DET= Results$DET
+  maxL=Results$maxL
+  L=Results$L
+  ENTR=Results$ENTR
+  LAM=Results$LAM
+  TT=Results$TT
+  
+  rqa=data.frame(RR, DET, maxL, L, ENTR, LAM, TT)
+  return(rqa)
+}
+
+#NAs if there's an error
+empty=function(){
+  RR= NA
+  DET=NA
+  maxL=NA
+  L=NA
+  ENTR=NA
+  LAM=NA
+  TT=NA
+  empty= data.frame(RR, DET,maxL,L,ENTR,LAM,TT)
+  return(empty)
+}
+  
+please= try(get_rqa("Pitch/Study1D0S101T8_f0.txt"), silent = T)
+if (class(please) == "try-error") { 
+  msg <- geterrmessage()           #saves the error message
+  please=empty() 
+  }
+
+```
+
+
+```{r pressure}
+# read in demo data
+read_demo= function() {
+  adat= read.table("DemoData.txt", header=T)
+  adat$Diagnosis=plyr::revalue(adat$Diagnosis, c("Control"="0", "Schizophrenia"="1"))
+  adat = plyr::rename(adat, c("Subject" = "id"))
+  return(adat)
+}
+
+```
+
+
+```{r pressure}
+# DO NOT RUN IT!!!!!
+
+file_list = list.files(path= "Pitch", full.names=T)
+
+playa=data.frame() # empty dataframe to store data
+for (i in file_list){
+  basic=get_name(i) 
+  stan= get_standard(i) 
+  part= try(get_rqa(i), silent=T) 
+  if (class(part) == "try-error") {
+    msg <- geterrmessage()
+    part=empty()
+  }
+  niidea= cbind(basic, stan, part) 
+  playa= rbind(playa, niidea) #fill in the dataframe
+}
+
+
+playa= read_demo() # demo
+port3_data= merge(niidea, playa) 
+
+write.csv(port3_data, file = "port3_data.csv", row.names = F) 
+
+
+```
+
+```{r pressure}
+# Data received by Viktória Torday, since my computer committed ritual suicide after losing a long-long fight against the loop in the previous chunk.
+
+#read in data
+port3_data= read.csv("port3_data.csv")
+port3_data$diagnosis= as.factor(port3_data$diagnosis)
+
+```
+
+
+3. Make one model per acoustic feature and test whether you can observe significant difference due to Diagnosis. Tip: Which other fixed factors should you control for (that is, include in the model)? Which random ones?
+- Bonus points: cross-validate the model and report the betas and standard errors from all rounds to get an idea of how robust the estimates are. 
+```{r pressure}
+#library(lme4)
+library(lmerTest)
+
+#using the model Riccardo created in class
+#model_ric= range ~ Diagnosis + trial + (1 + trial | Study) + (1 + Diagnosis + trial | id)
+
+model1= lmer(mean ~ diagnosis + trial + (1 + trial | study) + (1 + diagnosis + trial | id) ,port3_data)
+summary(model1) #significant
+#diagnosis is significant when we look at the mean (ß=11.68, SE= 3.68, p = .002). The patients have a 11.7 Hz higher mean of pitch. The mean of pitch is a good predictor for diagnosing schizophrenia.
+
+model2= lmer(sd ~ diagnosis + trial + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
+summary(model2) #not significant
+
+model3= lmer(minimum ~ diagnosis + trial + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
+summary(model3) #significant 
+
+#diagnosis is significant when we look at the minimum of the pitch (ß=16.38, SE= 3.76, p < .001). The minimum of the pitch of the patients is 16 Hz higher than the pitch of the controls. 
+
+
+model4= lmer(maximum ~ diagnosis + trial + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
+summary(model4) #not significant 
+#meaning patients might lack the low pitch controls have but they both "end up" making not significantly different high pitched noises??? Sch. cannot go so down as the controls
+
+model5= lmer(median ~ diagnosis + trial + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
+summary(model5) #significant
+
+#diagnosis is significant when we look at the median of the pitch (ß=9.69, SE= 3.56, p = .008). The median of the pitch of the patients is 10 Hz higher than the pitch of the controls.
+
+model6= lmer(iqr ~ diagnosis + trial + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
+summary(model6) #not significant
+
+model7= lmer(meanad ~ diagnosis + trial + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
+summary(model7) #not significant
+
+model8= lmer(coefvar ~ diagnosis + trial + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
+summary(model8) #significant 
+r.squaredGLMM(model8) 
+
+#diagnosis is significant when we look at the coefficient of variance of the pitch (ß=-4.78, SE= 1.29, p = .0003). The coefficient of variance of the pitch of the patients is 5 Hz lower than the pitch of the controls. 
+#♦what does this mean?
+# Monotonity, there is no big variance in their pitch 
+# like range (lesser range in this case), but standardized
+# question ending: fx. the controls lift their pitch more than the patients
+# sch. ppl's pitch varies less
+
+model9= lmer(range ~ diagnosis + trial + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
+summary(model9) # not significant 
+
+model10= lmer(RR~ diagnosis + trial + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
+summary(model10) # not significant
+
+model11= lmer(DET~ diagnosis + trial + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
+summary(model11) #significant
+
+# Diagnosis is significant when we look at the percent determinism of the RQA of the pitch (ß= -3.71, SE= 1.46, p = .01).
+# This means that the controls speak in meaningful sentences as predicted by pitch. So their speech is more structured (as seen by the more diagonal lines), their intonation corresponds to which kind of sentences they use (questions, statements, etc). For example, the pitch gets higher at the end of a question. While the schrizophrenic people use these intonations more randomly, not in a meaningful way.
+
+#High DET: when the system recurs, it tends to do that for at least two states in phase space
+#Low DET: when the system recurs, it tends to do that for only 1 state  (more monotone???)
+
+
+model12= lmer(maxL~ diagnosis + trial + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
+summary(model12) # not significant
+
+model13= lmer(L~ diagnosis + trial + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
+summary(model13) # not significant
+
+model14= lmer(ENTR~ diagnosis + trial + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
+summary(model14) #significant
+
+#Diagnosis is significant when we look at the entropy of the RQA of the pitch (ß= -0.16, SE= 0.04, p = .0006). The entropy for the pitch of the patients is lower than for the pitch of the controls. This can be interpreted as the patients speaking with more repetions in their pitch - their speech is more monotone. 
+
+#High Entropy: the system recurs in many different ways: sometimes short sequences, sometimes long sequences. 
+#Low Entropy: the system recurs in stereotyped ways: always the same length
+
+model15= lmer(LAM~ diagnosis + trial + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
+summary(model15) #significant
+
+#Diagnosis is significant when we look at the laminarity of the RQA of the pitch (ß= -3.27, SE= 1.23, p = .009). The laminarity for the pitch of the patients is lower than for the pitch of the controls. This can be interpreted as the patients speaking more often with the same pitch - their speech is more monotone.
+#how predictable the system is - lower number means greater predictability.
+
+#High LAM: sequences tend to be composed of the same state repeated over and over
+#Low LAM: sequences if present (cf. DET) tend to be composed of different states
+
+model16= lmer(TT~ diagnosis + trial + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
+summary(model16) #significant
+
+#Diagnosis is significant when we look at the trapping time of the RQA of the pitch (ß= -0.82, SE= 0.17, p < .001). The trapping time for the pitch of the patients is lower than for the pitch of the controls. This can be interpreted as the patients speaking with the same pitch for a shorter time continuosly - their speech is less monotone.
+#their vertical lines are shorter, meaning their speech is frozen for a shorter time.
+# Question example: patients' intonation is more random, while the controls only change their speech where the rules of speech and grammar desires it. It explains the TT, but does not necessarily contradict the outcome showing the monotonity, since the patients still can only have smaller range and stuff, they just change pitches very often (but not in a big range)
+
+#High TT: when recurring a state the system tends to be trapped into it, repeating it again and again for long periods
+#Low TT: the system tends not to repeat the same state
+```
+
+3a. Is study a significant predictor in these models? What should you infer from this? Does study interact with diagnosis? What should you infer from this?
+
+```{r pressure}
+
+model17= lmer(mean ~ diagnosis + trial + study + (1 + trial | study) + (1 + diagnosis + trial | id) ,port3_data)
+summary(model17) # not significant
+
+model18= lmer(mean ~ diagnosis + trial + study*diagnosis + (1 + trial | study) + (1 + diagnosis + trial | id) ,port3_data)
+summary(model18) # not significant
+
+model19= lmer(sd ~ diagnosis + trial + study + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
+summary(model19) #not significant
+
+model20= lmer(sd ~ diagnosis + trial + study*diagnosis + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
+summary(model20) #not significant
+
+model25= lmer(median ~ diagnosis + trial + study + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
+summary(model25) # not significant
+
+model26= lmer(median ~ diagnosis + trial + study*diagnosis + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
+summary(model26)  #not significant
+
+model27= lmer(iqr ~ diagnosis + trial + study + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
+summary(model27) #not significant
+
+model28= lmer(iqr ~ diagnosis + trial + study*diagnosis + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
+summary(model28) #not significant
+
+model29= lmer(meanad ~ diagnosis + trial + study + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
+summary(model29) #not significant
+
+model30= lmer(meanad ~ diagnosis + trial + study*diagnosis + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
+summary(model30) #not significant
+
+model31= lmer(coefvar ~ diagnosis + trial  + study +  (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
+summary(model31) # not significant 
+
+model32= lmer(coefvar ~ diagnosis + trial  + study*diagnosis + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
+summary(model32) # not significant  
+
+model33= lmer(range ~ diagnosis + trial  + study + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
+summary(model33) # not significant 
+
+model34= lmer(range ~ diagnosis + trial  + study*diagnosis + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
+summary(model34) # significant ß= -13.0712  SE= 6.3840  p= 0.04341
+
+model35= lmer(RR~ diagnosis + trial + study + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
+summary(model35) # not significant
+
+model36= lmer(RR~ diagnosis + trial + study*diagnosis + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
+summary(model36) # not significant
+
+model37= lmer(DET~ diagnosis + trial + study + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
+summary(model37) # not significant
+
+model38= lmer(DET~ diagnosis + trial + study*diagnosis + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
+summary(model38) # not significant
+
+model39= lmer(maxL~ diagnosis + trial + study + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
+summary(model39) # significant  ß= 126.627  SE= 27.694  p< .0001 (1.97e-05)
+
+model40= lmer(maxL~ diagnosis + trial + study*diagnosis + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
+summary(model40) # not significant
+
+model41= lmer(L~ diagnosis + trial + study + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
+summary(model41) # significant ß= -0.25390 SE= 0.07765  p= 0.00142
+
+model42= lmer(L~ diagnosis + trial + study*diagnosis + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
+summary(model42) # not significant
+
+model43= lmer(ENTR~ diagnosis + trial + study + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
+summary(model43) # not significant
+
+model44= lmer(ENTR~ diagnosis + trial + study*diagnosis + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
+summary(model44) # not significant
+
+model45= lmer(LAM~ diagnosis + trial + study + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
+summary(model45) # not significant
+
+model46= lmer(LAM~ diagnosis + trial + study*diagnosis + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
+summary(model46) # not significant
+
+model47= lmer(TT~ diagnosis + trial + study + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
+summary(model47) # not significant
+
+model48= lmer(TT~ diagnosis + trial + study*diagnosis + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
+summary(model48) # not significant
+
+```
+
+***
+
+4. Bonus Question: Compare effect size of Diagnosis across the different measures. Which measure seems most sensitive?
+- Tip: to compare across measures you need to put all of them on the same scale, that is, you need to "standardize" them (z-score)
+
+5. Bonus question. In the Clinical Info file you have additional information about the participants. Which additional parameters (e.g. age, gender) should we control for? Report the effects.
+
+6. Write a paragraph reporting methods and results
+
+[Next assignment: can we use these measures to build a tool that diagnoses people from voice only?]
+
+## N.B. Remember to save the acoustic features of voice in a separate file, so to be able to load them next time
