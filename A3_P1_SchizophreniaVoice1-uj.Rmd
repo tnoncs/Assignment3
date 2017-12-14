@@ -256,7 +256,7 @@ write.csv(port3_data, file = "port3_data.csv", row.names = F)
 ```
 
 ```{r pressure}
-# Data received by Viktória Torday, since my computer committed ritual suicide after losing a long-long fight against the loop in the previous chunk.
+# Data received FROM Viktória Torday
 
 #read in data
 port3_data= read.csv("port3_data.csv")
@@ -276,7 +276,6 @@ library(lmerTest)
 
 model1= lmer(mean ~ diagnosis + trial + (1 + trial | study) + (1 + diagnosis + trial | id) ,port3_data)
 summary(model1) #significant
-#diagnosis is significant when we look at the mean (ß=11.68, SE= 3.68, p = .002). The patients have a 11.7 Hz higher mean of pitch. The mean of pitch is a good predictor for diagnosing schizophrenia.
 
 model2= lmer(sd ~ diagnosis + trial + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
 summary(model2) #not significant
@@ -284,17 +283,11 @@ summary(model2) #not significant
 model3= lmer(minimum ~ diagnosis + trial + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
 summary(model3) #significant 
 
-#diagnosis is significant when we look at the minimum of the pitch (ß=16.38, SE= 3.76, p < .001). The minimum of the pitch of the patients is 16 Hz higher than the pitch of the controls. 
-
-
 model4= lmer(maximum ~ diagnosis + trial + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
 summary(model4) #not significant 
-#meaning patients might lack the low pitch controls have but they both "end up" making not significantly different high pitched noises??? Sch. cannot go so down as the controls
 
 model5= lmer(median ~ diagnosis + trial + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
 summary(model5) #significant
-
-#diagnosis is significant when we look at the median of the pitch (ß=9.69, SE= 3.56, p = .008). The median of the pitch of the patients is 10 Hz higher than the pitch of the controls.
 
 model6= lmer(iqr ~ diagnosis + trial + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
 summary(model6) #not significant
@@ -306,13 +299,6 @@ model8= lmer(coefvar ~ diagnosis + trial + (1 + trial | study) + (1 + diagnosis 
 summary(model8) #significant 
 r.squaredGLMM(model8) 
 
-#diagnosis is significant when we look at the coefficient of variance of the pitch (ß=-4.78, SE= 1.29, p = .0003). The coefficient of variance of the pitch of the patients is 5 Hz lower than the pitch of the controls. 
-#♦what does this mean?
-# Monotonity, there is no big variance in their pitch 
-# like range (lesser range in this case), but standardized
-# question ending: fx. the controls lift their pitch more than the patients
-# sch. ppl's pitch varies less
-
 model9= lmer(range ~ diagnosis + trial + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
 summary(model9) # not significant 
 
@@ -322,11 +308,8 @@ summary(model10) # not significant
 model11= lmer(DET~ diagnosis + trial + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
 summary(model11) #significant
 
-# Diagnosis is significant when we look at the percent determinism of the RQA of the pitch (ß= -3.71, SE= 1.46, p = .01).
-# This means that the controls speak in meaningful sentences as predicted by pitch. So their speech is more structured (as seen by the more diagonal lines), their intonation corresponds to which kind of sentences they use (questions, statements, etc). For example, the pitch gets higher at the end of a question. While the schrizophrenic people use these intonations more randomly, not in a meaningful way.
-
 #High DET: when the system recurs, it tends to do that for at least two states in phase space
-#Low DET: when the system recurs, it tends to do that for only 1 state  (more monotone???)
+#Low DET: when the system recurs, it tends to do that for only 1 statE
 
 
 model12= lmer(maxL~ diagnosis + trial + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
@@ -338,26 +321,17 @@ summary(model13) # not significant
 model14= lmer(ENTR~ diagnosis + trial + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
 summary(model14) #significant
 
-#Diagnosis is significant when we look at the entropy of the RQA of the pitch (ß= -0.16, SE= 0.04, p = .0006). The entropy for the pitch of the patients is lower than for the pitch of the controls. This can be interpreted as the patients speaking with more repetions in their pitch - their speech is more monotone. 
-
 #High Entropy: the system recurs in many different ways: sometimes short sequences, sometimes long sequences. 
 #Low Entropy: the system recurs in stereotyped ways: always the same length
 
 model15= lmer(LAM~ diagnosis + trial + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
 summary(model15) #significant
 
-#Diagnosis is significant when we look at the laminarity of the RQA of the pitch (ß= -3.27, SE= 1.23, p = .009). The laminarity for the pitch of the patients is lower than for the pitch of the controls. This can be interpreted as the patients speaking more often with the same pitch - their speech is more monotone.
-#how predictable the system is - lower number means greater predictability.
-
 #High LAM: sequences tend to be composed of the same state repeated over and over
 #Low LAM: sequences if present (cf. DET) tend to be composed of different states
 
 model16= lmer(TT~ diagnosis + trial + (1 + trial | study) + (1 + diagnosis + trial | id),port3_data)
 summary(model16) #significant
-
-#Diagnosis is significant when we look at the trapping time of the RQA of the pitch (ß= -0.82, SE= 0.17, p < .001). The trapping time for the pitch of the patients is lower than for the pitch of the controls. This can be interpreted as the patients speaking with the same pitch for a shorter time continuosly - their speech is less monotone.
-#their vertical lines are shorter, meaning their speech is frozen for a shorter time.
-# Question example: patients' intonation is more random, while the controls only change their speech where the rules of speech and grammar desires it. It explains the TT, but does not necessarily contradict the outcome showing the monotonity, since the patients still can only have smaller range and stuff, they just change pitches very often (but not in a big range)
 
 #High TT: when recurring a state the system tends to be trapped into it, repeating it again and again for long periods
 #Low TT: the system tends not to repeat the same state
